@@ -1,0 +1,1114 @@
+​​Table of Contents 
+
+​ 
+
+​ 
+
+​ 
+
+​​ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+LegalGenie MVP — First-cut Design & Technical Plan  
+
+1) What’s live today (first cut)  
+
+Hosted URL: local instance (UI reachable; data is static/hardcoded).  
+
+Harvey-inspired workspace UI with 5 modules in the sidebar:  
+
+Research 2) Contracts 3) Drafting 4) Litigation 5) Compliance  
+
+Global Search bar on every screen with Search and Ask Genie actions (wired to placeholder endpoints).  
+
+Consistent component library (shadcn/ui), charts (Recharts), motion (Framer), icons (Lucide).  
+
+Stable API contracts defined in the UI (so the backend can be implemented/swapped without changing the UI).  
+
+Shape  
+
+2) UX / Functionality by module  
+
+A) Global Shell (Header + Sidebar + Global Search)  
+
+Header: settings (language, data residency), notifications, profile.  
+
+Sidebar: module navigation and quick actions (Upload/Export/Translate/History).  
+
+Global Search  
+
+Search → (target) semantic retrieval across judgments/contracts.  
+
+Ask Genie → (target) RAG answer with strict citations.  
+
+Today: UI states (loading/error) and result lists are present; responses are mock.  
+Target: Calls to real endpoints (/api/vector/search, /api/research/ask) behind adapters.  
+
+Shape  
+
+B) Research Engine (priority #1)  
+
+Panels:  
+
+Semantic Search Results  
+
+Ranked hits with relevance%, court, judge, date, languages; actions: Open, Add to Brief.  
+
+Judge Pattern Analysis (chart)  
+
+Trends by court / judge alignment (placeholder dataset).  
+
+Citation Builder  
+
+Form to generate Indian citations (case/year/court/reporter).  
+
+RAG Chat  
+
+Freeform Q&A with “Top sources” (case + paragraph span).  
+
+Today: All panels render; data mocked.  
+Target functionality:  
+
+/api/vector/search → retrieval (Chroma first).  
+
+/api/research/ask → retrieve → (optional) rerank → prompt LLM → return { answer, sources[] }.  
+
+/api/research/judge-patterns → historical stats.  
+
+/api/research/citation-build & /api/research/validate-citation.  
+
+Shape  
+
+C) Contract Intelligence  
+
+Panels:  
+
+Risk Overview (pie), Key Clauses (list), Redlines (textarea with actions), Compliance Check (IT Act/DPDP/etc), Smart Obligations, Review Progress, Paste Contract Text.  
+
+Today: Full UI with mocked response.  
+Target: /api/contracts/review accepts { text|url } and returns:  
+
+{  
+
+  "risk_score": 0-100,  
+
+  "clauses":[{"name","risk","recommendation"}],  
+
+  "obligations":[{"title","due","status"}],  
+
+  "redlines":"...",  
+
+  "compliance":[{"name","status"}]  
+
+}  
+
+Upstream: OCR/ICR adapter (if PDF), clause extraction (LLM), rule engine for compliance.  
+
+Shape  
+
+D) Drafting Assistant  
+
+Panels:  
+
+Smart Templates (Notice, Writ, Bail, etc.) prefill prompt.  
+
+AI Writing (Prompt → Draft), Versioning & Export (New Version / DOCX), Collaboration (reviewer comments), Style & Clarity (readability).  
+
+Today: UI ready; mocked draft.  
+Target: /api/drafting/generate returns { draft_text, versionId }.  
+Future: /api/drafting/version, /api/drafting/export, /api/drafting/comments.  
+
+Shape  
+
+E) Litigation Support  
+
+Panels:  
+
+Strategy Recommendations, Timeline Builder (chart), Settlement Probability, Opposing Counsel stats.  
+
+Today: UI with demo data.  
+Target: /api/litigation/insights returns:  
+
+{  
+
+  "strategies":[{"title","text","confidence","cites"}],  
+
+  "timeline":[{"day","events"}],  
+
+  "settlement_probability": 0-100,  
+
+  "counsel_stats":[{"name","win"}]  
+
+}  
+
+Powered by retrieval + heuristics/ML baseline.  
+
+Shape  
+
+F) Compliance Dashboard  
+
+Panels:  
+
+Compliance Status tiles (DPDP, IT Act, Companies Act), Regulatory Updates, Audit Trail with Export Report.  
+
+Today: UI & mocked lists.  
+Target: /api/compliance/status + /api/compliance/ack, /api/compliance/report.  
+Feeds adapter for RBI/SEBI/MCA/CERT-In/State Gazettes (RSS/API/scrape).  
+
+Shape  
+
+3) Technical architecture (MVP)  
+
+Frontend  
+
+Vite + React + TypeScript  
+
+shadcn/ui for consistent components, Recharts for visualizations, Framer Motion for micro-interactions.  
+
+Single API layer (api<T>()) reading base URL from VITE_API_BASE.  
+
+No vendor lock on the client; only calls our stable /api/*.  
+
+Backend (Express)  
+
+Adapter pattern everywhere — swap by .env only:  
+
+Vector DB: VECTOR_STORE=memory|chroma|pinecone|weaviate|pgvector  
+
+LLM: LLM_PROVIDER=openai|anthropic|hf|local  
+
+OCR/ICR: OCR_PROVIDER=tesseract|azure|google  
+
+Storage: STORAGE_PROVIDER=local|s3|gcs  
+
+Core routes (already referenced in UI):  
+
+/api/vector/search  
+
+/api/research/ask  
+
+/api/research/judge-patterns  
+
+/api/research/citation-build  
+
+/api/contracts/review  
+
+/api/drafting/generate  
+
+/api/litigation/insights  
+
+/api/compliance/status  
+
+(Admin) /api/admin/upsert for ingestion  
+
+Data contracts (stable)  
+
+Kept minimal and UI-agnostic (see JSON examples above).  
+
+Any provider implements the same inputs/outputs.  
+
+RAG pipeline (target for Research tab)  
+
+Ingestion: file → OCR (if needed) → clean → chunk → embed → upsert.  
+
+Query: text → retrieve top-k (vector + optional keyword hybrid) → rerank → build context.  
+
+Generate: LLM template (strict citations) → produce answer + {sources: [{id,cite,span}]}.  
+
+Observability: log request ID, latencies, hit stats, and citations returned.  
+
+Shape  
+
+4) Environment & deployment  
+
+Frontend .env: VITE_API_BASE=http://localhost:8787  
+
+Backend .env (local dev example):  
+
+PORT=8787  
+
+VECTOR_STORE=chroma  
+
+CHROMA_URL=http://localhost:8000  
+
+LLM_PROVIDER=openai  
+
+OPENAI_API_KEY=...  
+
+OCR_PROVIDER=tesseract  
+
+STORAGE_PROVIDER=local  
+
+Local run: two terminals (backend npm run dev, frontend npm run dev).  
+
+Chroma local (optional now): docker run -d -p 8000:8000 chromadb/chroma:latest.  
+
+  
+
+ 
+
+Research Tab: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+Scenarios 
+
+01 – Direct Q&A (Omnibox → Ask Genie) 
+
+What you can do in it: 
+
+Type a question → Ask Genie → see Answer + Sources Used. 
+
+We auto-seed Case Law Search Results (ranked) and mark cases Used by Genie implicitly (by selection). 
+
+Click Open on a result or Open at span from sources → see a modal with highlighted span. 
+
+Click Brief on a result → collect and Export Brief (JSON). 
+
+Mock Ups: 
+
+Ask Genie 
+
+ 
+
+Adding Brief 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+Sources Used 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+02 – Search Cases (Filters + Verify) 
+
+This mock shows the lawyer workflow when they start with filters + search cases (without invoking Genie yet): 
+
+Type a question → Filters Search → Cases → Search result list. 
+
+Filter toggles for Court, Language, Date Range (Example: set “Supreme Court, English, last 5y”). 
+
+Search results list: 
+
+Case cards with Relevance, Bench size, Language, Coverage %. 
+
+Case snippet, court/judge/date shown. 
+
+Actions: Open (para viewer modal) and Brief (add to collected authorities). 
+
+Click Brief on a result → collect and Export Brief (JSON). 
+
+Modal viewer: 
+
+When you click Open, you see a judgment body with highlighted span (e.g. “Para 20”). 
+
+ 
+
+Mock Ups: 
+
+Search Cases 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect.A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+03 – Hybrid (Search → Ask → Follow-ups) 
+
+This mock demonstrates the lawyer’s hybrid workflow: 
+
+Scenario flow 
+
+Start with Search 
+
+Lawyer types “Indemnity clauses enforceability” 
+
+Hits Search → sees ranked results. 
+
+Ask Genie 
+
+Same query, but presses Ask Genie (or Shift+Enter). 
+
+Genie synthesizes an answer citing the top cases. 
+
+In the results list, badges mark “Used by Genie” next to cited cases. 
+
+Follow-up Questions 
+
+Lawyer types “What about damages caps?” and hits Ask Genie again. 
+
+A new Q&A block is stacked in the Answers panel, preserving history in the same thread. 
+
+Inspect & Verify 
+
+Clicking Open on any case → modal viewer highlights the referenced para. 
+
+Lawyer can verify against the primary source. 
+
+Mock Ups: 
+
+A white rectangular object with a black stripe
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+ 
+
+ 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+04 – Attach-and-Research (My Files + Case Law) 
+
+This mock demonstrates how a lawyer blends their uploaded files with public case law in research: 
+
+Upload files 
+
+Lawyer uploads Client_Contract.pdf (or email/DOCX). 
+
+System indexes it (mocked in this scenario). 
+
+Search / Ask Genie 
+
+Search runs across both case law + my docs. 
+
+Results show two panels: Case Law Results and My Documents. 
+
+Ask Genie Answer 
+
+When Genie is invoked, answer cites both sources: 
+
+SC precedent (2019 SCC 999, Para 22) 
+
+Client contract (p.3 ¶7). 
+
+Brief Building 
+
+Lawyer adds judgments or uploaded docs to Brief. 
+
+Brief panel shows mixed authorities (cases + docs). 
+
+Mock Ups: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+ 
+
+05 – Multi-thread within a project 
+
+This mock up is specifically about validating how a lawyer can juggle multiple issues inside the same matter. 
+
+Start with one issue (Indemnity Clauses). 
+
+Switch to another issue (Damages Caps). 
+
+Start researching Arbitration Validity in parallel. 
+
+Collect authorities into briefs per thread. 
+
+Keep everything under the same project (ACME Contract Dispute). 
+
+Mock Ups: 
+
+ 
+
+ 
+
+ 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+06 – Multi-Projects & Privacy 
+
+Project switching (multi-matter)Top-left “Projects:” buttons (e.g., ACME Contract Dispute, Anticipatory Bail Matter). Click each → threads, results, answers, and history all change per project. When you switch projects, it auto-selects that project’s first thread. 
+
+Privacy modes (per project) 
+
+Buttons: Incognito, Firm-Private, Opt-in Training. 
+
+Toggle them and watch the badges update: 
+
+Incognito → “No storage” badge. 
+
+Firm-Private → “Firm scope” badge. 
+
+Opt-in → “Allows model training” badge + a green consent banner (mock). 
+
+These are project-scoped: switch projects to see different privacy defaults. 
+
+Threads per project 
+
+Each project has its own thread list. Switch threads; verify history/answers/results are isolated within that project. “+ New Thread” appends a blank thread to the active project and selects it. 
+
+Universal omnibox behaviors stay consistent 
+
+Enter = Search (adds a history item in the active thread). 
+
+Shift+Enter = Ask Genie (adds an answer with a mock source from that project/thread). 
+
+Provenance: “Open at span” jumps to case/doc modal tied to the current project’s data. 
+
+Results tabs and items 
+
+Tabs: All | Case Law | My Documents. 
+
+Case rows show Relevance, Bench, Language; Docs show Scope (Project/Thread). 
+
+Mock Ups: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+07 – Provenance & Audit 
+
+Answer provenance (right panel) 
+
+Each source shows: 
+
+Confidence badge (green ≥90, cyan ≥75, amber <75) 
+
+Status (validated / user-doc / warning) 
+
+“Open at span” jumps straight to the cited paragraph/page in the modal. 
+
+Audit history with filters 
+
+Open Audit History card → use filters: all / search / ask / upload / note. 
+
+Each entry has: 
+
+Timestamp badge 
+
+Uppercased action 
+
+Query text 
+
+A small hash-like ID (mock) for audit integrity. 
+
+Export Audit JSON 
+
+Top-left Export Audit JSON or the Audit Export card → downloads a thread snapshot: 
+
+Project + privacy 
+
+Thread metadata 
+
+Full history 
+
+Answers (with source-level confidence/status) 
+
+Case/doc registries 
+
+Checksum of history+answers 
+
+Results panel remains unified 
+
+Tabs: All / Case Law / My Documents 
+
+Case rows include Used by Genie where relevant. 
+
+“Open” shows mock viewer with highlighted span. 
+
+Normal omnibox behavior 
+
+Enter → adds a search to history. 
+
+Shift+Enter → adds an ask + a new answer with a mock validated source. 
+
+This scenario gives you a concrete blueprint for: 
+
+Implementing source-level confidence and validation status, 
+
+Building a filterable audit trail, 
+
+Exporting a forensic JSON snapshot for compliance. 
+
+Mock Ups: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+08 – Needs-Attention Queue 
+
+Ask Genie Answer with Flags 
+
+The answer shows sources with statuses: 
+
+OK → validated and safe. 
+
+Stale → older authority (e.g., 2010 SCC case) that might no longer be good law. 
+
+Low Confidence → document snippet flagged due to OCR or extraction issues. 
+
+Each status is color-coded with a badge so the lawyer immediately knows where to focus. 
+
+Needs-Attention Panel 
+
+Right-hand card lists all flagged items: 
+
+Case flagged as Stale authority. 
+
+Uploaded contract flagged as Low OCR confidence. 
+
+Each entry has: 
+
+Type (Case/Doc) 
+
+Reason (stale, low-confidence, mismatch, etc.) 
+
+Resolve button → removes it from the queue (mock). 
+
+Workflow Value 
+
+Lawyers get a triage list of problems instead of hunting through all results. 
+
+They can resolve or dismiss issues as they review, keeping the workspace clean. 
+
+This also makes it clear to management / clients that risky sources were spotted and reviewed. 
+
+Together with Scenario 7 (Audit), this proves we can support compliance-heavy environments: 
+
+Scenario 7 = “We tracked everything.” 
+
+Scenario 8 = “We flagged the risky stuff and resolved it.” 
+
+Mock Ups: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+09 - Citation Builder 
+
+Pick a case 
+
+From Results or from an Answer’s Sources, click “Use in Citation.” 
+
+The Citation Builder shows the selected case (parties + reporter). 
+
+Choose style 
+
+Buttons: Indian, Bluebook-ish, ILR. 
+
+The Preview updates instantly. 
+
+Options 
+
+Include parallel toggle adds/removes SCC/AIR/etc parallels. 
+
+Pinpoint field (e.g., “Para 16” or “p. 112”) updates the preview. 
+
+Copy actions 
+
+Copy Full → the preview. 
+
+Copy Short Form → e.g., ACME (2021). 
+
+Copy Footnote → appends (footnote) in this mock. 
+
+End-to-end flow 
+
+Run a search or ask a question (omnibox still works; adds to History). 
+
+Choose a result → Use in Citation → tweak style/options → Copy. 
+
+Add to Brief if you want to collect authorities. 
+
+Everything else remains unchanged: 
+
+Header (Project + Privacy + Thread tabs) 
+
+Left: Results tabs (All | Case Law | My Documents) 
+
+Right: Ask Genie, Citation Builder, History, Needs-Attention (empty in this scenario), Brief 
+
+Case/Doc modals open at the cited span 
+
+Mock Ups: 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+ 
+
+10 - Judge Pattern Analysis 
+
+At the top of the Judge Pattern Analysis card, there’s a “Switch to Single / Switch to Compare” button. 
+
+This lets the lawyer flip between: 
+
+Single Judge View (e.g., just Chandrachud J analytics) 
+
+Comparison View (side-by-side: Chandrachud J vs Bhushan J). 
+
+Comparison Mode 
+
+Shows two mini dashboards side by side, one per judge. 
+
+Each contains: 
+
+Win rate breakdown (petitioner vs respondent). 
+
+Citations of S.73/74 in contract cases. 
+
+Reversal rate in SC benches. 
+
+Frequent co-judges. 
+
+Trend (sparkline) placeholder. 
+
+Example (mock data): 
+
+Chandrachud J → 61% petitioner win rate, 27% citing S.73/74. 
+
+Bhushan J → 48% petitioner win rate, 12% citing S.73/74. 
+
+Single Judge Mode 
+
+Same as before (Scenario 10), but only one judge card is visible. 
+
+Shape 
+
+ Why This Matters 
+
+Lawyers can quickly see which judge is more favorable to their side. 
+
+Helps with case allocation strategy (e.g., “do we push for this judge, or seek transfer?”). 
+
+Shows bench dynamics: frequent co-judges, reversal vulnerability. 
+
+Mock Ups: 
+
+ 
+
+11- Opposing Counsel Analysis card 
+
+Opposing Counsel Analysis 
+
+Segmented outcome bar (Wins/Losses/Settlements) 
+
+Frequent judges mini bars 
+
+Average duration 
+
+Trend sparkline (12 mo) 
+
+Argument tags (keywords) 
+
+Mock Ups: 
+
+ 
+
+A screenshot of a computer
+
+AI-generated content may be incorrect. 
+
+What we’re shipping (Scope) 
+
+Core “Research” only 
+
+Workspaces (aka Projects/Matters) 
+
+Threads inside a workspace 
+
+Universal Omnibox (Enter = Search, Shift+Enter = Ask Genie) 
+
+Results (All | Case Law | My Docs) 
+
+Ask-Genie conversation (long, threaded, sources under answers) 
+
+Attachments (upload docs to workspace/thread) 
+
+Privacy controls (incognito, don’t train base model) 
+
+Citation builder (India) 
+
+Needs-Attention queue (stale authority, OCR confidence, etc.) 
+
+Brief (collected authorities & docs) 
+
+History (every action) 
+
+Feature-flag OFF for analytics (judge/counsel). Keep the panel code behind RESEARCH_ANALYTICS=false. 
+
+Shape 
+
+High-level architecture (vendor-agnostic) 
+
+Frontend: Vite + React (you already have this) 
+Backend API: Node + Express 
+DB (metadata & auth): Postgres (via Prisma) 
+Vector index: Adapter pattern (default Chroma, pluggable: pgvector, Qdrant, Pinecone later) 
+Storage: S3-compatible (local MinIO in dev; easily switch to Azure/AWS later) 
+OCR: Adapter (default Tesseract local; pluggable to Azure Computer Vision, Google Vision) 
+LLM: Adapter (default OpenAI/Anthropic; pluggable to local model later) 
+Auth: Email magic link or OAuth (Clerk/Auth0) – single-tenant OK for now 
+Streaming: Server-Sent Events (SSE) for Genie answers 
+Observability: pino logs + request IDs; basic metrics endpoints 
+
+Adapter interfaces (TypeScript) 
+
+// /api/src/ports/vector.ts 
+
+export interface VectorIndex { 
+
+  upsert(docs: {id:string; text:string; metadata:any}[]): Promise<void>; 
+
+  search(query: string, k: number, filter?: any): Promise<Array<{id:string; score:number; metadata:any}>>; 
+
+} 
+
+ 
+
+// /api/src/ports/ocr.ts 
+
+export interface OCRService { 
+
+  extractText(filePath: string, opts?: {lang?: string}): Promise<{text:string; confidence:number}>; 
+
+} 
+
+ 
+
+// /api/src/ports/storage.ts 
+
+export interface BlobStore { 
+
+  put(key: string, file: Buffer|Uint8Array, mime: string): Promise<{url:string}>; 
+
+  get(key: string): Promise<Buffer>; 
+
+} 
+
+ 
+
+// /api/src/ports/llm.ts 
+
+export interface LLM { 
+
+  streamAnswer(prompt: string, opts: {system?:string; citations?:any[]}): AsyncIterable<string>; 
+
+} 
+
+Provide adapters: 
+
+/api/src/adapters/chroma.ts implements VectorIndex (default). 
+
+Later swap to Qdrant/Pinecone by swapping a single line in container.ts. 
+
+Shape 
+
+Data model (Prisma style, simplified) 
+
+model User { id String @id @default(cuid()) email String @unique } 
+
+model Workspace { id String @id @default(cuid()) name String ownerId String privacyMode String @default("private") createdAt DateTime @default(now()) } 
+
+model Thread { id String @id @default(cuid()) workspaceId String title String createdAt DateTime @default(now()) } 
+
+model Message { id String @id @default(cuid()) threadId String role String text String createdAt DateTime @default(now()) } 
+
+model Source { id String @id @default(cuid()) threadId String kind String // "case"|"doc" 
+
+  refId String // e.g., caseId or docId 
+
+  cite String? span String? confidence Int? status String? // validated | stale | low-confidence 
+
+} 
+
+model CaseDoc { id String @id @default(cuid()) workspaceId String title String? reporter String? year Int? court String? judge String? date String? parallel String? 
+
+  textPath String? // blob key 
+
+  meta Json? 
+
+} 
+
+model Upload { id String @id @default(cuid()) workspaceId String threadId String? name String mime String blobKey String textPath String? ocrConfidence Int? meta Json? } 
+
+model BriefItem { id String @id @default(cuid()) threadId String kind String refId String addedAt DateTime @default(now()) } 
+
+model History { id String @id @default(cuid()) threadId String type String // search|ask|upload|open 
+
+  payload Json createdAt DateTime @default(now()) } 
+
+model Attention { id String @id @default(cuid()) workspaceId String kind String title String reason String severity String @default("medium") createdAt DateTime @default(now()) } 
+
+Note: Use Postgres JSONB for meta & payload. Keep cases/documents as rows + a blob textPath (full text in S3/MinIO), plus embeddings in the vector index. 
+
+Shape 
+
+API contracts (stable) 
+
+Workspaces/Threads 
+
+POST /api/workspaces {name, privacyMode} → {id} 
+
+GET /api/workspaces → list 
+
+POST /api/threads {workspaceId, title} → {id} 
+
+GET /api/threads?workspaceId=... → list 
+
+Research 
+
+GET /api/research/search?threadId=&q=&filters= → { cases:[], docs:[] } 
+
+POST /api/research/ask (SSE) body {threadId, q} → stream tokens; final message saved with sources[] 
+
+GET /api/research/history?threadId= → {history:[]} 
+
+Uploads 
+
+POST /api/upload?workspaceId=&threadId= (multipart) → {uploadId, name, ocrConfidence, textPath} 
+
+background: OCR → chunk → embed → VectorIndex.upsert 
+
+Brief 
+
+POST /api/brief {threadId, kind, refId} → {ok:true} 
+
+GET /api/brief?threadId= → list 
+
+Citation 
+
+GET /api/citation/:caseId?pinpoint=&includeParallels=true → string 
+
+Attention 
+
+GET /api/attention?workspaceId= → list 
+
+POST /api/attention/resolve {id} → {ok:true} 
+
+Shape 
+
+Step-by-step build (module by module) 
+
+0) Repo hygiene 
+
+Monorepo or two folders: /web (React), /api (Express). 
+
+Add env: 
+
+API: DATABASE_URL, BLOB_ENDPOINT (MinIO), VECTOR_KIND (chroma), LLM_PROVIDER 
+
+Web: VITE_API_BASE=http://localhost:3000 
+
+1) DB + Prisma 
+
+Install Postgres; in dev use Docker or local. 
+
+npx prisma init → define schema above; prisma migrate dev. 
+
+Seed with 1 user, 1 workspace, 1 thread. 
+
+2) Storage (MinIO) & OCR (Tesseract) 
+
+Start MinIO locally; create bucket legalgenie. 
+
+Tesseract CLI available on the machine. 
+
+Write MinioBlobStore and TesseractOCRService adapters. 
+
+3) Vector index (Chroma) via adapter 
+
+Start Chroma server (Docker). 
+
+Implement ChromaIndex (upsert/search). 
+
+Chunker: simple 1–2k tokens with overlap. 
+
+4) API routes (Express) 
+
+Auth middleware (stub: one user). 
+
+Implement endpoints listed above. 
+
+Ask SSE: stream tokens; on finish, save message + sources[] (top-k from retrieval). 
+
+Search: hybrid = BM25 (pg trigram or elastic later) + vector; merge & rerank simple (score normalize + weight). 
+
+5) Ingestion pipeline (uploads) 
+
+/upload: save file → OCR (if pdf/image) → store textPath → chunk + embed → VectorIndex.upsert. 
+
+Flag ocrConfidence < 70 to Attention. 
+
+6) Frontend integration 
+
+Workspaces/Threads: create/switch; store currentWorkspace, currentThread. 
+
+Omnibox: call /search or /ask; push to History and Conversation. 
+
+Conversation: show sources, “Open at span”. 
+
+Results: list cases/docs; “Open”, “Use in Citation”, “Add to Brief”. 
+
+Citation builder: format string locally; optional /citation/:id. 
+
+Needs-Attention: load/resolve. 
+
+Brief: list items. 
+
+History: show every action. 
+
+7) Privacy modes 
+
+Workspace has privacyMode (private|incognito|optin). 
+
+Pass this into /ask → adapter suppresses logging/telemetry for incognito; never push to training. 
+
+Add UI toggles under Omnibox (already in your mock). 
+
+8) Hardening 
+
+Input validation (zod/joi). 
+
+File type allow-list. 
+
+10MB upload limit (configurable). 
+
+Rate limiting /ask. 
+
+Request IDs + structured logs. 
+
+Test documents to prepare 
+
+Judgments (public domain) 
+
+10–20 Supreme Court cases (2015–2024). 
+
+10 Delhi/other HC cases. 
+
+Variety: contract damages, indemnity, arbitration. 
+
+Mix text PDFs and scanned PDFs (to exercise OCR), 1–2 in Hindi if possible. 
+
+Private docs (for uploads) 
+
+3–5 MSA/contract PDFs (text version + one scanned). 
+
+2 Notices/pleadings (docx/pdf). 
+
+Metadata CSV (optional, helps seeding) 
+
+title, reporter, year, court, judge, date, parallels 
+
+If you can’t collect now, I’ll give you a small synthetic seed that resembles Indian citations to start. 
+
+ 
+
+Demo script (what to show) 
+
+Create Workspace “ACME v XYZ” → New Thread “Indemnity under S.73/74”. 
+
+Upload Client_Contract.pdf → watch Needs-Attention flag low OCR if scanned. 
+
+Ask Genie: “What is the position on indemnity clauses under S.73/74?” → answer streams, Sources listed. 
+
+Search: “indemnity Section 73 74 court:SC” → Results fill with cases. 
+
+Open one → Use in Citation → show Citation Builder (toggle parallels, add pinpoint, copy). 
+
+Add 2–3 items to Brief. 
+
+Show History with all actions. 
+
+Toggle Incognito and Don’t train to demonstrate privacy. 
+
+ 

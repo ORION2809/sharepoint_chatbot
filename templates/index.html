@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SharePoint Chatbot</title>
+  <style>
+    :root {
+      --primary: #0078d4;
+      --primary-dark: #106ebe;
+      --primary-light: #deecf9;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --border: #e5e7eb;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --radius: 12px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.12);
+      --transition: .2s ease;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: var(--text);
+    }
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, #005a9e 100%);
+      color: #fff;
+      padding: 14px 24px;
+      font-size: 17px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+      z-index: 10;
+    }
+    header svg { width: 22px; height: 22px; fill: #fff; }
+    header .spacer { flex: 1; }
+    header button {
+      background: rgba(255,255,255,.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,.3);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background var(--transition);
+    }
+    header button:hover { background: rgba(255,255,255,.25); }
+    header button:disabled { opacity: .5; cursor: not-allowed; }
+    #index-badge {
+      font-size: 11px;
+      background: rgba(255,255,255,.12);
+      padding: 3px 12px;
+      border-radius: 20px;
+      letter-spacing: .3px;
+    }
+    /* ── Index banner ── */
+    #index-banner {
+      background: #fff3cd;
+      color: #664d03;
+      padding: 10px 24px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #e9d8a6;
+    }
+    #index-banner.running { background: #cff4fc; color: #055160; border-color: #b6effb; }
+    #index-banner.done { display: none; }
+    #index-banner .bar {
+      flex: 1; height: 4px; background: #e0e0e0; border-radius: 2px; overflow: hidden;
+    }
+    #index-banner .bar-fill {
+      height: 100%; background: var(--primary); width: 0%; transition: width .3s;
+    }
+    /* ── Chat area ── */
+    #chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+    .msg {
+      max-width: 720px;
+      padding: 14px 18px;
+      border-radius: var(--radius);
+      line-height: 1.6;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      animation: fadeIn .25s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .msg.user {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+      box-shadow: var(--shadow-sm);
+    }
+    .msg.bot {
+      background: var(--surface);
+      color: var(--text);
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border);
+    }
+    .msg.bot .sources {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+    .msg.bot .sources span {
+      display: inline-block;
+      background: var(--primary-light);
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin: 2px 4px 2px 0;
+    }
+    .msg.bot .sources a {
+      display: inline-block;
+      background: var(--primary-light);
+      padding: 3px 10px;
+      border-radius: 6px;
+      margin: 2px 4px 2px 0;
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .msg.bot .sources a:hover {
+      background: #b8d4f0;
+      text-decoration: underline;
+    }
+    .msg.error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
+    .typing {
+      align-self: flex-start;
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .typing .dots span {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: bounce .6s infinite alternate;
+      margin: 0 1px;
+    }
+    .typing .dots span:nth-child(2) { animation-delay: .2s; }
+    .typing .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { to { transform: translateY(-4px); opacity: .4; } }
+    /* ── Input bar ── */
+    #input-bar {
+      padding: 14px 24px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 -2px 8px rgba(0,0,0,.04);
+    }
+    #input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    #input-row input {
+      flex: 1;
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    #input-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,120,212,.15); }
+    #input-row button {
+      padding: 10px 22px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background var(--transition);
+    }
+    #input-row button:disabled { opacity: .5; cursor: not-allowed; }
+    #input-row button:hover:not(:disabled) { background: var(--primary-dark); }
+    /* ── Vision toggle row ── */
+    #toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .toggle-switch {
+      position: relative;
+      width: 38px; height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: #ccc;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .toggle-slider::before {
+      content: "";
+      position: absolute;
+      width: 16px; height: 16px;
+      left: 2px; top: 2px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform var(--transition);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--primary); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+    #vision-warning {
+      display: none;
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 500;
+      animation: fadeIn .2s ease;
+    }
+    #vision-warning.show { display: inline; }
+    /* ── Modal ── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.5); z-index: 100;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface); border-radius: 16px; padding: 28px;
+      width: 480px; max-width: 90vw; box-shadow: var(--shadow-lg);
+      animation: fadeIn .2s ease;
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 18px; }
+    .modal .stats { font-size: 13px; color: #555; margin-bottom: 16px; line-height: 1.8; }
+    .modal .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    .modal button {
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      cursor: pointer; border: 1px solid var(--border); background: #f9fafb;
+      transition: background var(--transition);
+    }
+    .modal button:hover { background: #f0f0f0; }
+    .modal button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .modal button.primary:hover { background: var(--primary-dark); }
+    .modal button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .modal button.danger:hover { background: #b91c1c; }
+  </style>
+</head>
+<body>
+  <header>
+    <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+    SharePoint Chatbot
+    <span class="spacer"></span>
+    <span id="index-badge">…</span>
+    <button id="index-btn" onclick="openIndexModal()">⚙ Index</button>
+  </header>
+
+  <div id="index-banner" class="done">
+    <span id="index-banner-text"></span>
+    <div class="bar"><div class="bar-fill" id="index-bar-fill"></div></div>
+  </div>
+
+  <div id="chat-container">
+    <div class="msg bot">Hi! Ask me anything about your SharePoint documents. Use the <strong>⚙ Index</strong> button to scan and index your files first.</div>
+  </div>
+
+  <div id="input-bar">
+    <div id="input-row">
+      <input id="question" type="text" placeholder="Ask a question about your SharePoint files…" autocomplete="off" />
+      <button id="send-btn" onclick="sendQuestion()">Send</button>
+    </div>
+    <div id="toggle-row">
+      <label class="toggle-switch">
+        <input type="checkbox" id="vision-toggle" onchange="onVisionToggle()" />
+        <span class="toggle-slider"></span>
+      </label>
+      <span>🔍 Analyze images &amp; videos</span>
+      <span id="vision-warning">⚠ May add 10–30 s per media file</span>
+    </div>
+  </div>
+
+  <!-- Index Modal -->
+  <div class="modal-backdrop" id="index-modal">
+    <div class="modal">
+      <h2>Document Index</h2>
+      <div class="stats" id="index-stats">Loading…</div>
+      <div class="actions">
+        <button class="danger" onclick="clearIndex()">Clear Index</button>
+        <button onclick="startIndex('folder')">Index Folder</button>
+        <button class="primary" onclick="startIndex('all')">Index All Sites</button>
+        <button onclick="closeIndexModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const chatContainer = document.getElementById("chat-container");
+    const questionInput = document.getElementById("question");
+    const sendBtn = document.getElementById("send-btn");
+    const indexBadge = document.getElementById("index-badge");
+    const indexBanner = document.getElementById("index-banner");
+    const indexBannerText = document.getElementById("index-banner-text");
+    const indexBarFill = document.getElementById("index-bar-fill");
+    const indexStats = document.getElementById("index-stats");
+    const visionToggle = document.getElementById("vision-toggle");
+    const visionWarning = document.getElementById("vision-warning");
+    let pollTimer = null;
+
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !sendBtn.disabled) sendQuestion();
+    });
+
+    function onVisionToggle() {
+      visionWarning.classList.toggle("show", visionToggle.checked);
+    }
+
+    /* ── Chat ── */
+    function addMessage(text, cls, sources) {
+      const div = document.createElement("div");
+      div.className = "msg " + cls;
+      div.textContent = text;
+      if (sources && sources.length) {
+        const srcDiv = document.createElement("div");
+        srcDiv.className = "sources";
+        let html = "<strong>Sources:</strong> ";
+        html += sources.map(s => {
+          if (typeof s === "object" && s.url) {
+            return `<a href="${escapeAttr(s.url)}" target="_blank" rel="noopener" title="Open in SharePoint">${escapeHtml(s.name)}</a>`;
+          }
+          const name = typeof s === "object" ? s.name : s;
+          return `<span>${escapeHtml(name)}</span>`;
+        }).join("");
+        srcDiv.innerHTML = html;
+        div.appendChild(srcDiv);
+      }
+      chatContainer.appendChild(div);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+      return div;
+    }
+
+    function escapeAttr(s) {
+      return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/'/g,"&#39;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function sendQuestion() {
+      const q = questionInput.value.trim();
+      if (!q) return;
+      const analyzeMedia = visionToggle.checked;
+      questionInput.value = "";
+      addMessage(q, "user");
+      sendBtn.disabled = true;
+      const typing = document.createElement("div");
+      typing.className = "typing";
+      typing.innerHTML = analyzeMedia
+        ? '<span class="dots"><span></span><span></span><span></span></span> Analyzing media &amp; thinking… (this may take longer)'
+        : '<span class="dots"><span></span><span></span><span></span></span> Searching chunks &amp; thinking…';
+      chatContainer.appendChild(typing);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      try {
+        const resp = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, analyze_media: analyzeMedia }),
+        });
+        typing.remove();
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          addMessage("Error: " + (err.detail || resp.statusText), "error");
+          return;
+        }
+        const data = await resp.json();
+        addMessage(data.answer, "bot", data.sources);
+      } catch (err) {
+        typing.remove();
+        addMessage("Network error: " + err.message, "error");
+      } finally {
+        sendBtn.disabled = false;
+        questionInput.focus();
+      }
+    }
+
+    /* ── Index status ── */
+    async function refreshBadge() {
+      try {
+        const r = await fetch("/api/index/stats");
+        const s = await r.json();
+        indexBadge.textContent = `${s.indexed_files} files · ${s.total_chunks} chunks`;
+      } catch { indexBadge.textContent = "–"; }
+    }
+
+    async function refreshIndexStatus() {
+      try {
+        const r = await fetch("/api/index/status");
+        const s = await r.json();
+        if (s.running) {
+          indexBanner.className = "running";
+          indexBannerText.textContent = s.progress || "Indexing…";
+          const m = (s.progress || "").match(/\[(\d+)\/(\d+)\]/);
+          if (m) indexBarFill.style.width = Math.round((+m[1] / +m[2]) * 100) + "%";
+          if (!pollTimer) pollTimer = setInterval(refreshIndexStatus, 2000);
+        } else {
+          indexBanner.className = "done";
+          indexBarFill.style.width = "0%";
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          refreshBadge();
+        }
+      } catch {}
+    }
+
+    /* ── Index modal ── */
+    function openIndexModal() {
+      document.getElementById("index-modal").classList.add("open");
+      loadIndexStats();
+    }
+    function closeIndexModal() {
+      document.getElementById("index-modal").classList.remove("open");
+    }
+
+    async function loadIndexStats() {
+      try {
+        const r = await fetch("/api/index/stats");
+        const s = await r.json();
+        let html = `<strong>Indexed files:</strong> ${s.indexed_files}<br>`;
+        html += `<strong>Total chunks:</strong> ${s.total_chunks}<br><br>`;
+        if (s.indexed_files > 0) {
+          html += "<strong>Files:</strong><br>";
+          for (const [id, info] of Object.entries(s.files)) {
+            html += `  • ${escapeHtml(info.filename)} (${info.chunks} chunks)<br>`;
+          }
+        } else {
+          html += "<em>No documents indexed yet. Click a button below to start.</em>";
+        }
+        indexStats.innerHTML = html;
+      } catch { indexStats.textContent = "Failed to load stats."; }
+    }
+
+    async function startIndex(scope) {
+      closeIndexModal();
+      try {
+        const r = await fetch(`/api/index?scope=${scope}`, { method: "POST" });
+        if (r.status === 409) { alert("Indexing already in progress."); return; }
+        indexBanner.className = "running";
+        indexBannerText.textContent = "Starting…";
+        pollTimer = setInterval(refreshIndexStatus, 2000);
+      } catch (e) { alert("Failed: " + e.message); }
+    }
+
+    async function clearIndex() {
+      if (!confirm("Clear the entire index? You will need to re-index.")) return;
+      try {
+        await fetch("/api/index/clear", { method: "POST" });
+        loadIndexStats();
+        refreshBadge();
+      } catch (e) { alert("Failed: " + e.message); }
+    }
+
+    /* ── Init ── */
+    refreshBadge();
+    refreshIndexStatus();
+  </script>
+</body>
+</html>
